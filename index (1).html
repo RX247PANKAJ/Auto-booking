@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Auto Rickshaw Booking — QuickBook</title>
+  <meta name="description" content="Simple auto-rickshaw booking page. Select pickup & drop, use current location, and send booking to WhatsApp.">
+
+  <style>
+    :root{
+      --accent:#ff8c00;
+      --accent-dark:#e65a00;
+      --muted:#666;
+      --bg:#fffaf0;
+      --card:#fff;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family: Inter, Arial, Helvetica, sans-serif;
+      background:var(--bg);
+      color:#222;
+      -webkit-font-smoothing:antialiased;
+    }
+    header{
+      background:linear-gradient(90deg,var(--accent),var(--accent-dark));
+      color:white;padding:18px;text-align:center;font-size:20px;font-weight:700;
+      box-shadow:0 4px 12px rgba(0,0,0,0.08);
+    }
+    main{max-width:900px;margin:22px auto;padding:16px}
+    .card{background:var(--card);padding:18px;border-radius:12px;box-shadow:0 8px 26px rgba(0,0,0,0.06)}
+    form .row{display:flex;gap:12px;margin-bottom:12px}
+    .col{flex:1;display:flex;flex-direction:column}
+    label{font-size:13px;color:var(--muted);margin-bottom:6px}
+    input[type="text"], input[type="tel"], input[type="number"], textarea, select{
+      padding:10px;border-radius:8px;border:1px solid #eee;font-size:15px;
+      outline:none;background:#fff;
+    }
+    textarea{min-height:80px;resize:vertical;padding-top:10px}
+    .small{font-size:13px;color:#777;margin-top:6px}
+    .row.actions{align-items:center}
+    button.btn{
+      background:var(--accent);color:white;padding:10px 14px;border-radius:10px;border:none;
+      font-weight:700;cursor:pointer;font-size:15px;
+    }
+    button.secondary{background:#f0f0f0;color:#222;font-weight:600}
+    .map-note{font-size:13px;color:var(--muted);margin-top:8px}
+    .result{margin-top:14px;padding:12px;border-radius:10px;background:#f8fff7;border:1px solid #e8fbe8;color:#166a16}
+    .link-preview{margin-top:8px;font-size:13px;color:#0b63d6;word-break:break-all}
+    footer{margin-top:18px;text-align:center;color:#555;font-size:13px}
+    @media(max-width:700px){
+      .row{flex-direction:column}
+    }
+  </style>
+</head>
+<body>
+  <header>QuickBook — Auto Rickshaw Booking</header>
+
+  <main>
+    <div class="card">
+      <h2 style="margin:0 0 8px 0">Book an Auto — Fast & Easy</h2>
+      <p class="small">Fill the details below. On "Book Now" you'll be redirected to WhatsApp with a ready message for the driver.</p>
+
+      <form id="bookingForm" onsubmit="return false;">
+        <div class="row">
+          <div class="col">
+            <label for="name">Your Name</label>
+            <input id="name" type="text" placeholder="Ex: Rohit Kumar" required>
+          </div>
+          <div class="col">
+            <label for="phone">Phone (WhatsApp)</label>
+            <input id="phone" type="tel" placeholder="91xxxxxxxxxx" required>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="col">
+            <label for="pickup">Pickup Location</label>
+            <input id="pickup" type="text" placeholder="Type pickup address or landmark" required>
+            <div style="margin-top:8px;display:flex;gap:8px">
+              <button type="button" class="secondary btn" id="useLocationBtn">Use my current location</button>
+              <button type="button" class="secondary btn" id="copyPickupBtn">Copy coordinates</button>
+            </div>
+            <div id="pickupCoords" class="map-note" aria-live="polite"></div>
+          </div>
+
+          <div class="col">
+            <label for="drop">Drop Location</label>
+            <input id="drop" type="text" placeholder="Type destination address or landmark" required>
+            <div style="margin-top:8px;display:flex;gap:8px">
+              <button type="button" class="secondary btn" id="pastePickupBtn">Paste pickup coords</button>
+            </div>
+            <div id="dropCoords" class="map-note" aria-live="polite"></div>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="col">
+            <label for="passengers">Passengers</label>
+            <input id="passengers" type="number" min="1" value="1">
+          </div>
+          <div class="col">
+            <label for="vehicle">Vehicle Type</label>
+            <select id="vehicle">
+              <option>Auto Rickshaw</option>
+              <option>Shared Auto</option>
+              <option>Mini Truck</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="margin-top:10px">
+          <label for="note">Note (optional)</label>
+          <textarea id="note" placeholder="Any additional info, e.g., 'I have luggage'"></textarea>
+        </div>
+
+        <div class="row actions" style="margin-top:14px">
+          <button id="bookBtn" class="btn">Book Now — Send to WhatsApp</button>
+          <button id="previewMsg" class="btn secondary" style="margin-left:8px">Preview Message</button>
+        </div>
+
+        <div id="messagePreview" class="result" style="display:none"></div>
+        <div id="mapsLink" class="link-preview" style="display:none"></div>
+      </form>
+    </div>
+
+    <footer>
+      Tip: Allow location access for faster pickup selection. You can host this page on GitHub Pages or Netlify to share with others.
+    </footer>
+  </main>
+
+  <script>
+    // ====== CONFIG ======
+    // Replace this with your WhatsApp number if you want bookings to go to a different number:
+    const OWNER_WHATSAPP = "918788132369"; // country code + number, no '+'
+    // ====================
+
+    const useLocationBtn = document.getElementById('useLocationBtn');
+    const copyPickupBtn = document.getElementById('copyPickupBtn');
+    const pastePickupBtn = document.getElementById('pastePickupBtn');
+    const pickupCoordsDiv = document.getElementById('pickupCoords');
+    const dropCoordsDiv = document.getElementById('dropCoords');
+
+    let lastCoords = null; // {lat, lng}
+
+    // Use browser geolocation to get current coords
+    useLocationBtn.addEventListener('click', () => {
+      if (!navigator.geolocation) {
+        alert('Geolocation not supported by your browser.');
+        return;
+      }
+      useLocationBtn.disabled = true;
+      useLocationBtn.textContent = 'Locating...';
+
+      navigator.geolocation.getCurrentPosition((pos) => {
+        const lat = pos.coords.latitude.toFixed(6);
+        const lng = pos.coords.longitude.toFixed(6);
+        lastCoords = {lat, lng};
+        document.getElementById('pickup').value = `My Location (${lat}, ${lng})`;
+        pickupCoordsDiv.textContent = `Coordinates captured: ${lat}, ${lng}`;
+        useLocationBtn.textContent = 'Use my current location';
+        useLocationBtn.disabled = false;
+      }, (err) => {
+        alert('Could not get location: ' + (err.message || 'Permission denied'));
+        useLocationBtn.textContent = 'Use my current location';
+        useLocationBtn.disabled = false;
+      }, { enableHighAccuracy: true, timeout: 10000 });
+    });
+
+    // Copy pickup coords to temporary clipboard (internal)
+    copyPickupBtn.addEventListener('click', () => {
+      const pickupVal = document.getElementById('pickup').value.trim();
+      if (lastCoords) {
+        navigator.clipboard && navigator.clipboard.writeText(`${lastCoords.lat},${lastCoords.lng}`).then(() => {
+          pickupCoordsDiv.textContent = 'Coordinates copied to clipboard.';
+        }).catch(() => {
+          pickupCoordsDiv.textContent = 'Copy failed. You can manually copy: ' + `${lastCoords.lat},${lastCoords.lng}`;
+        });
+      } else if (pickupVal.match(/-?\d+\.\d+,\s*-?\d+\.\d+/)) {
+        navigator.clipboard && navigator.clipboard.writeText(pickupVal).then(() => {
+          pickupCoordsDiv.textContent = 'Pickup text copied to clipboard.';
+        }).catch(()=> pickupCoordsDiv.textContent = 'Cannot copy to clipboard.');
+      } else {
+        pickupCoordsDiv.textContent = 'No coordinates found in pickup. Use "Use my current location" first or type coords.';
+      }
+    });
+
+    // Paste copied pickup coords into drop input (quick convenience)
+    pastePickupBtn.addEventListener('click', async () => {
+      try {
+        const text = await navigator.clipboard.readText();
+        if (text && text.length > 2) {
+          document.getElementById('drop').value = text;
+          dropCoordsDiv.textContent = 'Pasted from clipboard.';
+        } else {
+          dropCoordsDiv.textContent = 'Clipboard empty or not supported.';
+        }
+      } catch (e) {
+        dropCoordsDiv.textContent = 'Paste failed (permission or unsupported).';
+      }
+    });
+
+    // Build the WhatsApp message
+    function buildMessage(data) {
+      const lines = [];
+      lines.push('🔔 New Auto Booking Request');
+      lines.push('');
+      lines.push(`👤 Name: ${data.name}`);
+      lines.push(`📱 Contact (WhatsApp): ${data.phone}`);
+      lines.push(`🚗 Vehicle: ${data.vehicle}`);
+      lines.push(`👥 Passengers: ${data.passengers}`);
+      lines.push('');
+      lines.push(`📍 Pickup: ${data.pickup}`);
+      if (data.pickupCoords) {
+        lines.push(`Map: https://www.google.com/maps/search/?api=1&query=${data.pickupCoords.lat},${data.pickupCoords.lng}`);
+      }
+      lines.push(`📍 Drop: ${data.drop}`);
+      if (data.dropCoords) {
+        lines.push(`Map: https://www.google.com/maps/search/?api=1&query=${data.dropCoords.lat},${data.dropCoords.lng}`);
+      }
+      if (data.note) {
+        lines.push('');
+        lines.push(`📝 Note: ${data.note}`);
+      }
+      lines.push('');
+      lines.push('Please confirm availability and fare. Thank you!');
+      return lines.join('\n');
+    }
+
+    // Try to detect coordinates from a text like "lat, lng" and return object or null
+    function parseCoordsFromText(text){
+      if (!text) return null;
+      const m = text.match(/(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)/);
+      if (m) {
+        return { lat: parseFloat(m[1]), lng: parseFloat(m[2]) };
+      }
+      return null;
+    }
+
+    // Preview message or send
+    document.getElementById('previewMsg').addEventListener('click', (e) => {
+      e.preventDefault();
+      const data = collectFormData();
+      const message = buildMessage(data);
+      const preview = document.getElementById('messagePreview');
+      preview.style.display = 'block';
+      preview.textContent = message;
+      // show map link if coords present
+      const mapsDiv = document.getElementById('mapsLink');
+      let links = '';
+      if (data.pickupCoords) links += `Pickup Map: https://www.google.com/maps/search/?api=1&query=${data.pickupCoords.lat},${data.pickupCoords.lng}\n`;
+      if (data.dropCoords) links += `Drop Map: https://www.google.com/maps/search/?api=1&query=${data.dropCoords.lat},${data.dropCoords.lng}\n`;
+      if (links) {
+        mapsDiv.style.display = 'block';
+        mapsDiv.textContent = links;
+      } else {
+        mapsDiv.style.display = 'none';
+      }
+      window.scrollTo({ top: preview.offsetTop - 20, behavior: 'smooth' });
+    });
+
+    document.getElementById('bookBtn').addEventListener('click', (e) => {
+      e.preventDefault();
+      const data = collectFormData();
+
+      // basic validation
+      if (!data.name || !data.phone || !data.pickup || !data.drop) {
+        alert('Please fill Name, Phone, Pickup and Drop fields.');
+        return;
+      }
+
+      const message = buildMessage(data);
+      const url = `https://wa.me/${OWNER_WHATSAPP}?text=${encodeURIComponent(message)}`;
+      // open WhatsApp chat on new tab/window
+      window.open(url, '_blank');
+    });
+
+    function collectFormData(){
+      const name = document.getElementById('name').value.trim();
+      const phone = document.getElementById('phone').value.trim();
+      const pickup = document.getElementById('pickup').value.trim();
+      const drop = document.getElementById('drop').value.trim();
+      const passengers = document.getElementById('passengers').value || '1';
+      const vehicle = document.getElementById('vehicle').value;
+      const note = document.getElementById('note').value.trim();
+
+      // pickup/drop coords: either use lastCoords (if pickup equals My Location) or parse from typed text
+      let pickupCoords = null;
+      let dropCoords = null;
+      if (pickup && pickup.includes('My Location') && lastCoords) {
+        pickupCoords = lastCoords;
+      } else {
+        pickupCoords = parseCoordsFromText(pickup);
+      }
+      dropCoords = parseCoordsFromText(drop);
+
+      return { name, phone, pickup, drop, passengers, vehicle, note, pickupCoords, dropCoords };
+    }
+
+    // Optional: prefill phone country code hint if empty
+    (function prefill() {
+      const ph = document.getElementById('phone');
+      if (!ph.value) ph.placeholder = '919876543210 (country code + number)';
+    })();
+
+  </script>
+</body>
+</html>
